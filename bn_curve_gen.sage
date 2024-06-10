@@ -21,10 +21,10 @@ def find_min_x(m, func):
 
 class BNCurveData:
     def __init__(self, p, n, B, y) -> None:
+        print(f"p = {p}, n = {n}, B = {B}, y = {y}")
         self._Fp = GF(p)
-        F = self._Fp['H']; H = F.gen();
-        self._Fp2 = self._Fp.extension(modulus = H**2 + 1, name="L")
-        self._Fp12  = self._Fp2.extension(6, 'T')
+        self._Fp2 = self._Fp.extension(2, name="L")
+        self._Fp12  = self._Fp2.extension(6, name='T')
         self._order = n
         self._curve = EllipticCurve(
             self._Fp, [0, B]
@@ -55,6 +55,12 @@ class BNCurveData:
     def curve(self):
         return self._curve
 
+    def curve2(self):
+        return self._curve2
+
+    def curve12(self):
+        return self._curve12
+
     def generators(self):
         return (self._g0, self._g1)
 
@@ -79,7 +85,7 @@ class BNCurveData:
         return P.weil_pair(Q, self._order)
 
     def __repr__(self) -> str:
-        return f"{{Curve: {self._curve}, generators: {self.generators()} }}"
+        return f"{{Curve: {self._curve12}, generators: {self.generators()} }}"
 
 
 def bn_curve_gen(curve_order_in_bits) -> BNCurveData:
@@ -127,4 +133,4 @@ def bn_curve_gen(curve_order_in_bits) -> BNCurveData:
         if n*G == E([0,1,0]):
             return BNCurveData(p, n, b, y)
 
-print (bn_curve_gen(32))
+print (bn_curve_gen(30))
