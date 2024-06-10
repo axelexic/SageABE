@@ -1,3 +1,6 @@
+# Sage to python files
+*.sage.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
