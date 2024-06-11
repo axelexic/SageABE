@@ -21,26 +21,56 @@ def lagrange_basis(field, xes, eval_at = None):
 
     return basis
 
+
+
 if __name__ == '__main__':
     from sage.rings.finite_rings.all import GF
-    Fp = GF(31)
-    R = PolynomialRing(Fp, 'Y')
-    Y = R.gen()
 
-    fx = Y**3+ 13*(Y**2) + 11*Y + 4
+    def test_basis_gen():
+        Fp = GF(50909)
+        R = PolynomialRing(Fp, 'Y')
+        Y = R.gen()
 
-    roots = dict()
+        fx = Y**3+ 13*(Y**2) + 11*Y + 4
 
-    for i in range(20):
-        x = Fp.random_element()
-        while x in roots:
+        roots = dict()
+
+        for i in range(100):
             x = Fp.random_element()
-        roots[x] = fx(x)
+            while x in roots:
+                x = Fp.random_element()
+            roots[x] = fx(x)
 
-    basis = lagrange_basis(Fp, list(roots.keys()))
-    result = Fp(0)
+        basis = lagrange_basis(Fp, list(roots.keys()))
+        result = Fp(0)
 
-    for r in roots.keys():
-        result = result + roots[r]*basis[r]
+        for r in roots.keys():
+            result = result + roots[r]*basis[r]
 
-    assert fx.list() == result.list()
+        assert fx.list() == result.list()
+
+    def test_value_gen():
+        Fp = GF(50909)
+        R = PolynomialRing(Fp, 'Y')
+        Y = R.gen()
+
+        fx = Y**3+ 13*(Y**2) + 11*Y + 4
+
+        roots = dict()
+
+        for i in range(50):
+            x = Fp.random_element()
+            while x in roots:
+                x = Fp.random_element()
+            roots[x] = fx(x)
+
+        basis = lagrange_basis(Fp, list(roots.keys()), 0)
+        result = Fp(0)
+
+        for r in roots.keys():
+            result = result + roots[r]*basis[r]
+
+        assert result == fx(0)
+
+    test_basis_gen()
+    test_value_gen()

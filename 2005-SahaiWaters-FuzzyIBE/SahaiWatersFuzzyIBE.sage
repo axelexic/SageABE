@@ -28,12 +28,15 @@ class FuzzyIBE:
 
         for i in self._attributes:
             t = self._lagrange_field.random_element()
-            T = t*self._curve.g0()
+            T = t*self.g0()
             self._priv_shares[i] = t
             self._pub_shares[i] = T
 
     def g0(self):
         return self._curve.g0()
+
+    def g1(self):
+        return self._curve.g1()
 
     def msk_params(self):
         return self._pub_shares
@@ -55,7 +58,7 @@ class FuzzyIBE:
             val = poly(ident)
             t = self._priv_shares[ident]
             r = val / t
-            user_shares[ident] = r*self._curve.g1()
+            user_shares[ident] = r*self.g1()
 
         return user_shares
 
@@ -64,6 +67,7 @@ class FuzzyIBE:
         M = self._curve.extension_field()(message)
         Y = pubkey["Y"]
         Eprime = M*(Y**s)
+        # print(f"Eprime := {Y**s}")
         Eshares = dict()
 
         for attrs in attributes:
@@ -79,8 +83,10 @@ class FuzzyIBE:
         for k in sk.keys():
             if k in ct_attrs:
                 lbasis = self._lagrange_basis[k]
-                pair = self._curve.pair(Eshares[k], sk[k])
+                pair = self._curve.pair(sk[k], Eshares[k])
                 common_attrs = common_attrs*(pair**lbasis)
+
+        # print(f"Blinding: {common_attrs}")
         m = Eprime / common_attrs
         return m
 
@@ -89,10 +95,10 @@ def main(args):
     fibe = FuzzyIBE(BN_CURVE_32, [1,2,3,4,5,6])
     pubkey = fibe.msk_params()
     sk = fibe.generate_key([3,5,2,6], 2)
-    ct = fibe.encrypt(pubkey, [1,2,3,4,5], 39)
+    ct = fibe.encrypt(pubkey, [3,5,2,6], 39)
+    # print(ct)
     m = fibe.decrypt(ct, sk)
-    print(m)
-    print(ct)
+    # print(m)
 
 if __name__=='__main__':
     main(sys.argv)
