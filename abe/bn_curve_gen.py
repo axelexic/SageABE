@@ -5,7 +5,10 @@
 # https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/pfcpo.pdf
 #
 
-from sage.all import *
+from sage.rings.all import *
+from sage.rings.finite_rings.all import GF
+from sage.schemes.all import EllipticCurve
+from sage.arith.misc import kronecker_symbol
 
 def find_min_x(m, func):
     x = 2**(m//4)
@@ -19,9 +22,17 @@ def find_min_x(m, func):
         else:
             x = 3*x//2
 
-class BNCurveData:
+class BNCurve:
     def __init__(self, p, n, B, y) -> None:
-        print(f"p = {p}, n = {n}, B = {B}, y = {y}")
+        # print(f"p = {p}, n = {n}, B = {B}, y = {y}")
+        p = Integer(p)
+        n = Integer(n)
+        B = Integer(B)
+        y = Integer(y)
+        assert p.is_prime()
+        assert n.is_prime()
+        assert B != 0
+
         self._Fp = GF(p)
         self._Fp2 = self._Fp.extension(2, name="L")
         self._Fp12  = self._Fp2.extension(6, name='T')
@@ -52,6 +63,8 @@ class BNCurveData:
         else:
             self._g1 = g1_small
 
+        self._gt = self._g0.weil_pairing(self._g1, self._order)
+
     def curve(self):
         return self._curve
 
@@ -62,7 +75,7 @@ class BNCurveData:
         return self._curve12
 
     def generators(self):
-        return (self._g0, self._g1)
+        return (self.g0(), self.g1(), self.gt())
 
     def order(self):
         return self._order
@@ -73,22 +86,28 @@ class BNCurveData:
     def g1(self):
         return self._g1
 
+    def gt(self):
+        return self._gt
+
     def base_field(self):
         return self._Fp
 
     def extension_field(self):
         return self._Fp12
 
+    def scalar_field(self):
+        return GF(self._order)
+
     def pair(self, m, n):
         P = m * self._g0
         Q = n * self._g1
-        return P.weil_pair(Q, self._order)
+        return P.weil_pairing(Q, self._order)
 
     def __repr__(self) -> str:
         return f"{{Curve: {self._curve12}, generators: {self.generators()} }}"
 
 
-def bn_curve_gen(curve_order_in_bits) -> BNCurveData:
+def bn_curve_gen(curve_order_in_bits) -> BNCurve:
     Z = ZZ['H']
     var_x = Z.gen()
     poly_p = 36*(var_x**4) + 36*(var_x**3) + 24*(var_x**2) + 6*var_x + 1
@@ -131,6 +150,16 @@ def bn_curve_gen(curve_order_in_bits) -> BNCurveData:
         y = B.sqrt(extend=False)
         G = E([1,y,1])
         if n*G == E([0,1,0]):
-            return BNCurveData(p, n, b, y)
+            return BNCurve(p, n, b, y)
 
-print (bn_curve_gen(30))
+
+CURVE32 = None
+
+def curve_32() -> BNCurve:
+    global CURVE32
+
+    if CURVE32 is None:
+        CURVE32 = bn_curve_gen(32)
+
+    return CURVE32
+
