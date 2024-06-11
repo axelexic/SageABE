@@ -9,6 +9,7 @@ from sage.rings.all import *
 from sage.rings.finite_rings.all import GF
 from sage.schemes.all import EllipticCurve
 from sage.arith.misc import kronecker_symbol
+from sage.schemes.elliptic_curves.ell_point import EllipticCurvePoint_field
 
 def find_min_x(m, func):
     x = 2**(m//4)
@@ -99,9 +100,18 @@ class BNCurve:
         return GF(self._order)
 
     def pair(self, m, n):
-        P = m * self._g0
-        Q = n * self._g1
+        if isinstance(m, (EllipticCurvePoint_field)):
+            P = m
+        else:
+            P = m * self._g0
+
+        if isinstance(n, (EllipticCurvePoint_field)):
+            Q = n
+        else:
+            Q = n * self._g1
+
         return P.weil_pairing(Q, self._order)
+
 
     def __repr__(self) -> str:
         return f"{{Curve: {self._curve12}, generators: {self.generators()} }}"

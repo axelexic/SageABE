@@ -1,4 +1,4 @@
-from abe import  BNCurve
+from abe import BNCurve, lagrange_basis
 from sage.rings.all import *;
 from sage.schemes.all import *;
 import sys
@@ -18,8 +18,13 @@ class FuzzyIBE:
         self._lagrange_field = pf_curve.scalar_field()
         self._poly = PolynomialRing(self._lagrange_field, name="W")
         self._y = self._lagrange_field.random_element()
+        self._y_pub = self._curve.pair(1, self._y)
+        self._lagrange_basis = lagrange_basis(self._curve.scalar_field(), attributes, 0)
+
         self._priv_shares = dict()
         self._pub_shares = dict()
+
+        self._pub_shares["Y"] = self._y_pub;
 
         for i in self._attributes:
             t = self._lagrange_field.random_element()
@@ -27,28 +32,67 @@ class FuzzyIBE:
             self._priv_shares[i] = t
             self._pub_shares[i] = T
 
+    def g0(self):
+        return self._curve.g0()
+
     def msk_params(self):
-        self._pub_shares
+        return self._pub_shares
 
     def generate_key(self, identity, d_threshold):
-        if d_threshold - 1 >= len(identity) or d_threshold < 2:
+        if d_threshold - 1 >= len(identity) or d_threshold < 1:
             raise ValueError("Threshold values must be less than identities count and greater than 1")
 
-        result = dict;
         x_var = self._poly.gen()
-        poly = self._poly(self._lagrange_field.random_element());
-
+        poly = 0
 
         for i in range(d_threshold - 1):
             poly = x_var * poly + self._lagrange_field.random_element()
 
         poly = x_var*poly + self._y
-        print(poly)
+        user_shares = dict()
+
+        for ident in identity:
+            val = poly(ident)
+            t = self._priv_shares[ident]
+            r = val / t
+            user_shares[ident] = r*self._curve.g1()
+
+        return user_shares
+
+    def encrypt(self, pubkey, attributes, message):
+        s = self._curve.scalar_field().random_element()
+        M = self._curve.extension_field()(message)
+        Y = pubkey["Y"]
+        Eprime = M*(Y**s)
+        Eshares = dict()
+
+        for attrs in attributes:
+            Yi = s*pubkey[attrs]
+            Eshares[attrs] = Yi
+
+        return (attributes, Eprime, Eshares)
+
+    def decrypt(self, ct, sk):
+        (ct_attrs, Eprime, Eshares) = ct
+        common_attrs = self._curve.extension_field()(1)
+
+        for k in sk.keys():
+            if k in ct_attrs:
+                lbasis = self._lagrange_basis[k]
+                pair = self._curve.pair(Eshares[k], sk[k])
+                common_attrs = common_attrs*(pair**lbasis)
+        m = Eprime / common_attrs
+        return m
 
 
 def main(args):
-    fibe = FuzzyIBE(BN_CURVE_32, [1,2,3,4,5,6]);
-    fibe.generate_key([3,5,2], 2)
+    fibe = FuzzyIBE(BN_CURVE_32, [1,2,3,4,5,6])
+    pubkey = fibe.msk_params()
+    sk = fibe.generate_key([3,5,2,6], 2)
+    ct = fibe.encrypt(pubkey, [1,2,3,4,5], 39)
+    m = fibe.decrypt(ct, sk)
+    print(m)
+    print(ct)
 
 if __name__=='__main__':
     main(sys.argv)
