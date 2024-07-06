@@ -10,6 +10,7 @@ from sage.rings.finite_rings.all import GF
 from sage.schemes.all import EllipticCurve
 from sage.arith.misc import kronecker_symbol
 from sage.schemes.elliptic_curves.ell_point import EllipticCurvePoint_field
+from hashlib import sha256
 
 def find_min_x(m, func):
     x = 2**(m//4)
@@ -112,6 +113,38 @@ class BNCurve:
 
         return P.weil_pairing(Q, self._order)
 
+    def _hash_input_encode(self, polyval):
+        if isinstance(polyval, (str)):
+            val = polyval.encode('utf-8')
+        elif isinstance(polyval, (bytes)):
+            val = polyval
+        elif isinstance(polyval, (int, Integer)):
+            len = (polyval.bit_length() + 7)//8
+            val = polyval.to_bytes(len)
+        else:
+            raise ValueError(f"hashing data of type {type(polyval)} not supported")
+
+        h = sha256(val).digest()
+
+        return int.from_bytes(h)
+
+    def hash2g0(self, polyval):
+        val = self._hash_input_encode(polyval)
+        while True:
+            p = self.scalar_field()(val)*self.g0()
+            if p == self.curve()([0, 1, 0]):
+                val = self._hash_input_encode(val)
+            else:
+                return p
+
+    def hash2g1(self, polyval):
+        val = self._hash_input_encode(polyval)
+        while True:
+            p = self.scalar_field()(val)*self.g1()
+            if p == self.curve12()([0, 1, 0]):
+                val = self._hash_input_encode(val)
+            else:
+                return p
 
     def __repr__(self) -> str:
         return f"{{Curve: {self._curve12}, generators: {self.generators()} }}"
@@ -173,3 +206,23 @@ def curve_32() -> BNCurve:
 
     return CURVE32
 
+
+if __name__=='__main__':
+    def test_hash():
+        c = curve_32()
+        g1 = c.hash2g0("this is a test")
+        g2 = c.hash2g0(b"this is a test")
+        g3 = c.hash2g0(int.from_bytes(b"this is a test"))
+        assert g1 == g2
+        assert g1 == g3
+
+        h1 = c.hash2g1("this is a test")
+        h2 = c.hash2g1(b"this is a test")
+        h3 = c.hash2g1(int.from_bytes(b"this is a test"))
+        assert h1 == h2
+        assert h3 == h1
+
+    def main():
+        test_hash()
+
+    main()
