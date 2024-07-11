@@ -6,8 +6,6 @@ from abe import BNCurve
 from sage.rings.all import *;
 from sage.schemes.all import *;
 from hashlib import sha256
-from sage.schemes.elliptic_curves.ell_point import EllipticCurvePoint
-import sys
 
 class PolyCommit:
     def __init__(self):
@@ -85,7 +83,7 @@ class CoefficientCommitment(PolyCommit):
         return expected == found
 
     @staticmethod
-    def run_sample_test(curve: BNCurve, poly):
+    def run_sample_test(curve: BNCurve, poly : PolynomialRing):
         cc = CoefficientCommitment(curve, poly)
         commit = cc.commit_poly()
         x_val = cc.scalar_field().random_element()
@@ -94,6 +92,78 @@ class CoefficientCommitment(PolyCommit):
 
         assert verif, "Polynomial commitment failed"
 
+
+class KZGCommit(PolyCommit):
+    """
+    Generate KZG commitment using M CRS coefficient
+    """
+    def __init__(self, group : BNCurve, M: int, poly : PolynomialRing):
+        super().__init__()
+        self._curve = group
+        self._poly = poly
+        trapdoor = group.scalar_field().random_element()
+        g0 = self._curve.g0()
+        g1 = self._curve.g1()
+        powers = [(trapdoor**i) for i in range(M)]
+        self._crs_0 = [p*g0 for p in powers]
+        self._crs_1 = [p*g1 for p in powers]
+
+    def crs_0(self):
+        return self._crs_0
+
+    def crs_1(self):
+        return self._crs_1
+
+    def poly(self):
+        return self._poly
+
+    def scalar_field(self):
+        return self._curve.scalar_field()
+
+    @staticmethod
+    def do_commit_on_crs(crs, poly):
+        commitment = None
+        for (i,coef) in enumerate(poly):
+            entry = coef*crs[i]
+            if commitment:
+                commitment = commitment + entry
+            else:
+                commitment = entry
+
+        return commitment
+
+
+    def commit_poly(self):
+        return KZGCommit.do_commit_on_crs(self.crs_0(), self.poly())
+
+    def eval_with_proof(self, x_val : FiniteField):
+        X = self.poly().variables()[0]
+        val = self.poly()(x_val)
+        poly_y = (self.poly() - val)
+        factor = (X - x_val)
+        assert (poly_y % factor) == 0, "Bug in code"
+        poly_g = poly_y // factor
+        proof = KZGCommit.do_commit_on_crs(self.crs_0(), poly_g)
+        return (val, proof)
+
+    def verify(self, commitment, x_val, y_val, proof):
+        # Compute (X-x_val) commitment on G2 group
+        linear_commit = KZGCommit.do_commit_on_crs(self.crs_1(), [-x_val, 1])
+        poly_minus_val = commitment - y_val*self.crs_0()[0]
+        lhs = self._curve.pair(proof, linear_commit)
+        rhs = self._curve.pair(poly_minus_val, self.crs_1()[0])
+
+        return lhs == rhs
+
+    @staticmethod
+    def run_sample_test(curve: BNCurve, poly: PolynomialRing):
+        cc = KZGCommit(curve, 24, poly)
+        commit = cc.commit_poly()
+        x_val = cc.scalar_field().random_element()
+        y_val, proof = cc.eval_with_proof(x_val)
+        verif = cc.verify(commit, x_val, y_val, proof)
+
+        assert verif, "KZG commitment verification failed"
 
 
 if __name__ == '__main__':
@@ -117,7 +187,8 @@ if __name__ == '__main__':
                 continue
             poly = poly*v
 
-        CoefficientCommitment.run_sample_test(BN_CURVE_32)
+        KZGCommit.run_sample_test(BN_CURVE_32, poly)
+        CoefficientCommitment.run_sample_test(BN_CURVE_32, poly)
 
     main()
 
