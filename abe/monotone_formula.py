@@ -9,12 +9,18 @@ import sage.logic.logicparser as lp
 from sage.rings.all import *
 from enum import Enum
 from sage.matrix.constructor import Matrix
+from typing import Callable, Any
 
 class NodeType(Enum):
     And =1
     Or = 2
     Not = 3
     Literal = 10
+
+class TravOrder(Enum):
+    Inorder = 1
+    Preorder = 2
+    Postorder = 3
 
 class Formula:
     def __init__(self, ty : NodeType, name: str, left = None, right = None ) -> None:
@@ -24,6 +30,27 @@ class Formula:
         self._right = right
         self._parent = None
         self._span = None
+        self._content = None
+        self._label = None
+
+    def label(self):
+        return self._label
+
+    def set_label(self, label):
+        self._label = label
+
+    def unique_name(self):
+        label = self.label()
+        name = self.name()
+        return f"{name}-{label}" if label else name
+
+    def content(self):
+        return self._content
+
+    def set_content(self, new_content):
+        old_content = self._content
+        self._content = new_content
+        return old_content
 
     def root(self):
         if self.parent() == None:
@@ -68,6 +95,46 @@ class Formula:
             lefts.extend(rights)
             return lefts
 
+    def sibling(self):
+        parent = self.parent()
+        if parent is None:
+            return None
+        l = parent.left()
+        r = parent.right()
+        if l == self:
+            return r
+        elif r == self:
+            return l
+        else:
+            assert False, "Bug in code"
+
+    def traverse(self, func : Callable[[Any], Any], order: TravOrder = TravOrder.Inorder, ):
+        """
+        Return the tree as a traversal list
+        """
+
+        if func == None:
+            raise ValueError("Traverse must have a non-None callable")
+
+        if self.ty == NodeType.Literal:
+            func(self)
+            return
+
+        if order == TravOrder.Preorder:
+            self.left().list_traverse(func,order)
+            func(self)
+            self.right().list_traverse(func, order)
+        elif order == TravOrder.Inorder:
+            func(self)
+            self.left().list_traverse(func, order)
+            self.right().list_traverse(func, order)
+        elif order == TravOrder.Postorder:
+            self.left().list_traverse(func, order)
+            self.right().list_traverse(func, order)
+            func(self)
+        else:
+            raise ValueError("Unknown traversal order")
+
     @staticmethod
     def relabel_duplicates(root_node):
         labels = root_node.literals()
@@ -92,7 +159,7 @@ class Formula:
 
         if is_monotone:
             Formula.relabel_duplicates(formula)
-            formula.set_span([1])
+            # formula.set_span([1])
 
         return formula
 
@@ -215,20 +282,11 @@ class LiteralNode(Formula):
         super().__init__(NodeType.Literal, name, None, None)
         self._label = 0
 
-    def label(self):
-        return self._label
-
-    def set_label(self, label):
-        self._label = label
-
-    def unique_name(self):
-        return f"{self.name()}{self.label()}"
-
     def __repr__(self) -> str:
         if self.span():
-            return f"{self.name()}{self.label()}/{self.span()}"
+            return f"{self.unique_name()}/{self.span()}"
         else:
-            return f"{self.name()}{self.label()}"
+            return f"{self.unique_name()}"
 
 
 class MSP:

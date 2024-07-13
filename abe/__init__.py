@@ -3,3 +3,4 @@ from .lagrange_interpolate import lagrange_basis
 from .monotone_formula import *
 from .silent_threshold_encryption import *
 from .poly_commit import *
+from .secret_sharing import *
