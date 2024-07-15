@@ -1,5 +1,5 @@
 #
-# Implementation of different types of scret sharing schemes
+# Implementation of different types of secret sharing schemes
 #
 
 from sage.rings.finite_rings.all import *
@@ -48,7 +48,7 @@ class SecretShare:
 
 class ShamirSecretSharing(SecretShare):
     """
-    Shamir's secret sharing scheme
+    Shamir's t-out-of-n threshold secret sharing scheme
     """
 
     @staticmethod
@@ -189,11 +189,36 @@ class BenalohLeichterCrypto1988(SecretShare):
     """
     Scheme by Benaloh and Leichter from Crypto 1988
     https://link.springer.com/chapter/10.1007/0-387-34799-2_3
+
+    This scheme can support any monotone threshold circuit, however,
+    it's implemented only for monotone boolean formula. Basic idea of
+    the scheme is that at each binary operator node in the binary tree
+    (i.e., non-leaf nodes), the scheme uses uses 1 out of 2, or 2 out of
+    2 Shamir Secret Sharing to achieve arbitrary monotone access
+    structures. The 1 out of 2 threshold shares are for OR gates, while
+    the 2 out of 2 is for AND gate. One can easily extend this code to
+    allow higher treshold gates.
     """
 
     @staticmethod
     def do_secret_share(node : Formula, secret: bytes | FiniteFieldGeneric, index :int, field : FiniteFieldFactory):
+        """
+        Given a boolean formula tree, recursively creates the shares in
+        the tree. Since the same literal in the formula can appear at
+        multiple places, for example in the formula `(a & b) | (b & c) |
+        (a & c)` the literal "a" appears in two different places.
+        However, the two different occurrences of "a" have different
+        positions in the tree, and each occurrence of "a" requires a
+        unique value.
 
+        In order to support multiple occurrence of the same literal,
+        each node in the tree is also given a unique numeric identifier
+        called `label` and each label gets its own share of the secret.
+        When doing reconstruction, one should only send out those label
+        values that are needed, not all labels. (This is a major
+        weakness of this scheme as users make lots of mistakes with
+        this.)
+        """
         if index < 1:
             raise ValueError("Node index must be non-zero")
 
@@ -225,6 +250,16 @@ class BenalohLeichterCrypto1988(SecretShare):
 
 
     def __init__(self, field_secret : bytes, access_structure: str | Formula, field : FiniteFieldFactory) -> None:
+        """
+        :param bytes field_secreet: The secret that should be shared
+
+        :param str   access_structure: A monotone boolean formula that
+            should be treated as the access structure.
+
+        :param FiniteFieldFactory field: The field over which the secret
+            sharing should work. For production systems, it should be at
+            least the size of the security parameter.
+        """
         if isinstance(access_structure, str):
             access_structure = Formula.from_formula(access_structure, is_monotone=True)
 
@@ -242,6 +277,16 @@ class BenalohLeichterCrypto1988(SecretShare):
         )
 
     def create_share(self, identity : UserId):
+        """
+        Given an identity, which should be a literal in the boolean
+        formula, it reutrns all the shares of all secrets corresponding
+        to different labels. To see which labels are assigned to which
+        nodes in the access structure, look at the string representation
+        of this object.
+
+        :param str identity: Literal whose shares are being request.
+            Returns a dictionary of secret shares for each label.
+        """
         universe = self.universe()
         if not isinstance(identity, (str)):
             raise ValueError("Shares can only be created for literals in the boolean formula")
@@ -259,7 +304,21 @@ class BenalohLeichterCrypto1988(SecretShare):
                 shares[label] = entry.secret().to_bytes()
         return shares
 
+    def __repr__(self) -> str:
+        return f"{self.access_structure()}"
+
     def recombine(self, shares: dict[UserId, dict[UserId, Any]]) -> bytes:
+        """
+        Tries to reconstruct the secret where the shares for each
+        literal is given in a dictionary. Each value of the dictionary
+        contains a list of labels corresponding to that literal.
+
+        :param dict share: A ditionary whose keys are literals in the
+            boolean formula, and whose value is again a dictionary. The
+            value dictionary keys are the labels and key-shares
+            corresponding to that label.
+
+        """
         literals = self.access_structure().literals()
         working_set = dict()
         parents = set()
@@ -273,6 +332,33 @@ class BenalohLeichterCrypto1988(SecretShare):
             if key_share:
                 working_set[l.label()] = (l, key_share)
                 parents.add(l.parent())
+
+        #
+        # The recombine logic works are follows: Given the list of
+        # literals and labels by the caller, we first collect all _the
+        # parents_ of those literals in a set called `parents`. Also, we
+        # keep a dictionary of { label : key-share } KVP called the
+        # `working_set`. The `working-set` is essentially the set of
+        # key-shares of the secret that's available to the algorithm at
+        # any given point.
+        #
+        # Then we traverse through all the `parents` and see if any
+        # parent has it's children in the working set that can help it
+        # create its own key-share. For an OR gate, this mean having at
+        # least one child in the `working_set`; for an AND gate, both
+        # the children must be in the `working_set.`
+        #
+        # If a parent is able to generate it's secret from its children,
+        # it then puts its own parent in the parent list, and puts
+        # itself into the `working_set.` This process continues until we
+        # either reach the root node, in which case we return the
+        # recombined secret, or there's no possibility of recombing
+        # anything (i.e., the formula is unsatisfiable) and we raise an
+        # error.
+        #
+        # The following while loop is doing exactly what's described
+        # above.
+        #
 
         while True:
             has_update = False

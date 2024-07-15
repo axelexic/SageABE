@@ -25,7 +25,19 @@ def find_min_x(m, func):
             x = 3*x//2
 
 class BNCurve:
+    """
+    An instance of a Barreto-Naehrig Curve
+    """
     def __init__(self, p, n, B, y) -> None:
+        """
+        Create a BNCurve instance. A BN Curve is a short Weierstarss curve of the form Y^ = X^3 + B. The
+        generator of points in the base field
+
+        :param int p : Characteristic of the field
+        :param int n : Prime order of the curve
+        :param int B : The B constant of the curve
+        :param int y : (1:y:1) is a generator of the base curve
+        """
         # print(f"p = {p}, n = {n}, B = {B}, y = {y}")
         p = Integer(p)
         n = Integer(n)
@@ -36,15 +48,25 @@ class BNCurve:
         assert B != 0
 
         self._Fp = GF(p)
+        # Quadratic extension of Fp
         self._Fp2 = self._Fp.extension(2, name="L")
+
+        # Sextic extension of Fp2
         self._Fp12  = self._Fp2.extension(6, name='T')
         self._order = n
+
+        # Base field curve
         self._curve = EllipticCurve(
             self._Fp, [0, B]
         )
+
+        # Quadratic extension field curve
         self._curve2 = self._curve.change_ring(self._Fp2)
+
+        # degree-12 extension field curve
         self._curve12 = self._curve2.change_ring(self._Fp12)
 
+        # Base field generator point
         self._g0 = self._curve12([1, y,1])
 
         assert self._g0.order() == n
@@ -101,6 +123,9 @@ class BNCurve:
         return GF(self._order)
 
     def pair(self, m, n):
+        """
+        Compute the weil paring
+        """
         if isinstance(m, (EllipticCurvePoint_field)):
             P = m
         else:
@@ -129,6 +154,13 @@ class BNCurve:
         return int.from_bytes(h)
 
     def hash2g0(self, polyval):
+        """
+        A simple but insecure hash to group G0 implementation. The
+        function just computes the hash of the input and uses that hash
+        the discrete log. This is clearly as insecure as things can get,
+        but it's simple to implement and also works with extension field
+        curves
+        """
         val = self._hash_input_encode(polyval)
         while True:
             p = self.scalar_field()(val)*self.g0()
@@ -138,6 +170,13 @@ class BNCurve:
                 return p
 
     def hash2g1(self, polyval):
+        """
+        A simple but insecure hash-to-group G1 implementation. The
+        function just computes the hash of the input and uses that hash
+        as the discrete log. This is clearly as insecure as things can
+        get.
+        """
+
         val = self._hash_input_encode(polyval)
         while True:
             p = self.scalar_field()(val)*self.g1()
@@ -151,6 +190,11 @@ class BNCurve:
 
 
 def bn_curve_gen(curve_order_in_bits) -> BNCurve:
+    """
+    Implements Algorithm-1 (Page 5) from the paper
+    https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/pfcpo.pdf
+    """
+
     Z = ZZ['H']
     var_x = Z.gen()
     poly_p = 36*(var_x**4) + 36*(var_x**3) + 24*(var_x**2) + 6*var_x + 1

@@ -1,6 +1,22 @@
+#
+# tools for working with the lagrange basis
+#
 from sage.rings.polynomial.all import PolynomialRing
 
 def lagrange_basis(field, xes, eval_at = None):
+    """
+    Given a set of evaluation points `xes`, computes the lagarange basis
+    using those points.
+
+    :param FiniteField field: Base field of the polynomial
+
+    :param FiniteField list[field_element]: List of x coordinates from
+        the field
+
+    :param FiniteField eval_at: If eval_at is None, it returns an actual
+        polynomial basis. On the other hand, if eval_at is non-Null, it
+        evaluates the different bases at that point.
+    """
     if eval_at is None:
         R = PolynomialRing(field, "H")
         H = R.gen()
