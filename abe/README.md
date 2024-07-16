@@ -43,5 +43,6 @@ well as KZG Commitment
   implementation only support monotone boolean formula (i.e., only
   binary AND and OR gates). The syntax of the boolean function is based
   on SageMath's
-  [Boolean Formula](https://doc.sagemath.org/html/en/reference/logic/sage/logic/boolformula.html) module. 
+  [Boolean Formula](https://doc.sagemath.org/html/en/reference/logic/sage/logic/boolformula.html) module.
 
+- **Nikov Nokova ePrint 2004/282**:
